@@ -1,31 +1,29 @@
 """
-CS440 Assignment 2
-Submitted by K. Brett Mulligan (eID: kbmulli) (CSUID: 830189830)
-My code searches for solutions to the Huarong Pass puzzle using different 
-search methods. It utilizes the search.py code from the Norvig AI text.
-To find a solution to the puzzle, import the module, and call 
-p2.huarong_pass_search(search_name) where search_name is one of 'BFS', 'DFS', 
-or 'IDS'.  I recommend only using DFS since the time complexity of both BFS and
-IDS is too large. Alternatively, call the search.py methods directly on an 
-instance of HuarongPass. The function will return a list of actions which will
-transform the initial state to the goal state.
+CS440 Assignment 3
+Submitted by K. Brett Mulligan (eID: kbmulli)
+My code...
 """
 
 #################################################
-# p2.py - find a solution to the Huarong Pass Puzzle
+# p3.py - find a solution to Huarong Pass using A* and two different heuristics
 # by K. Brett Mulligan
-# 9 Sep 2014
+# 24 Sep 2014
 # CSU CS440
 # Dr. Asa Ben-Hur
 #################################################
 
 import search
+import time
 
 DO_TESTING = False                                                                      
 PARTIAL_GOAL = False
 goal_state = None
 
-DEPTH_LIMIT = 120
+
+fn_hp_results = 'huarong_pass_results.txt'
+fn_ms_results = 'maxsat_results.txt'
+
+
 
 BLANK = 'X'
 
@@ -669,38 +667,10 @@ def direction_of (action):
 
 #######################################
 
-# This is the external interface.
-# Given "search_name" of 'BFS', 'DFS', 'IDS', or 'BID'
-# returns a list of actions which lead initial state to goal state
-def huarong_pass_search(search_name):
-    goal_actions = []
+# runs tests and outputs to results file
+def run_huarong_pass():
 
-    hp = HuarongPass()
-
-    if search_name == 'BFS':
-        # print "Breadth first search...good choice. ", time.asctime()
-        goal_actions = search.breadth_first_search(hp).solution()
-
-    elif search_name == 'DFS':
-        # print "Depth first search...really?", time.asctime()
-        goal_actions = search.depth_first_graph_search(hp).solution()
-
-    elif search_name == 'IDS':
-        # print "Iterative deepening search...great choice!", time.asctime()
-        goal_actions = search.iterative_deepening_search(hp).solution()
-
-    elif search_name == 'BID':
-        # print "Bidirectional search...not required...using BFS instead..."
-        goal_actions = huarong_pass_search('BFS')
-
-    elif search_name == 'DLS':
-        # print "Depth limited search...", time.asctime()
-        goal_actions = search.depth_limited_search(hp, DEPTH_LIMIT).solution()
-
-    else:
-        print "Invalid search_name given. Exiting..."
-
-    return goal_actions
+  pass
 
 
 
@@ -743,190 +713,6 @@ def test_moves(tile):
     print "Moves test complete."
 
 
-def test_bfs_7steps():
-    global goal_state
-
-    print "Testing BFS in 7 steps..."
-
-    hp_0  = HuarongPass()
-    hp_0.set_initial_state(initial_state)
-
-    hp_24 = HuarongPass(step_24_state)
-    hp_30 = HuarongPass(step_30_state)
-    hp_41 = HuarongPass(step_41_state)
-    hp_48 = HuarongPass(step_48_state)
-    hp_59 = HuarongPass(step_59_state)
-    hp_72 = HuarongPass(step_72_state)
-    hp_81 = HuarongPass(step_81_state)
-
-    goal_state = step_24_state
-    acts_0_24 = search.breadth_first_search(hp_0).solution()
-
-    goal_state = step_30_state
-    acts_24_30 = search.breadth_first_search(hp_24).solution()
-
-    goal_state = step_41_state
-    acts_30_41 = search.breadth_first_search(hp_30).solution()
-
-    goal_state = step_48_state
-    acts_41_48 = search.breadth_first_search(hp_41).solution()                 
-
-    goal_state = step_59_state
-    acts_48_59 = search.breadth_first_search(hp_48).solution()  
-
-    goal_state = step_72_state
-    acts_59_72 = search.breadth_first_search(hp_59).solution()  
-
-    goal_state = None
-    acts_72_81 = search.breadth_first_search(hp_72).solution()
-
-
-    print len(acts_0_24), acts_0_24
-    print len(acts_24_30), acts_24_30
-    print len(acts_30_41), acts_30_41
-    print len(acts_41_48), acts_41_48
-    print len(acts_48_59), acts_48_59
-    print len(acts_59_72), acts_59_72
-    print len(acts_72_81), acts_72_81
-
-    acts = acts_0_24 + acts_24_30 + acts_30_41 + acts_41_48 + acts_48_59 + acts_59_72 + acts_72_81
-    print "Total steps: ", len(acts)
-
-    audit_state(hp_0.state_given(initial_state, acts))
-
-    print "BFS test complete. (7 step)"
-
-
-def test_bfs_4steps():
-    global goal_state
-
-    print "Testing BFS in 4 steps..."
-
-    hp_0  = HuarongPass(initial_state)
-    hp_24 = HuarongPass(step_24_state)
-    hp_41 = HuarongPass(step_41_state)
-    hp_59 = HuarongPass(step_59_state)
-
-    goal_state = step_24_state
-    acts_0_24 = search.breadth_first_search(hp_0).solution()
-
-    goal_state = step_41_state
-    acts_24_41 = search.breadth_first_search(hp_24).solution()               
-
-    goal_state = step_59_state
-    acts_41_59 = search.breadth_first_search(hp_41).solution()   
-
-    goal_state = None
-    acts_59_81 = search.breadth_first_search(hp_59).solution()
-
-
-    print len(acts_0_24), acts_0_24
-    print len(acts_24_41), acts_24_41
-    print len(acts_41_59), acts_41_59
-    print len(acts_59_81), acts_59_81
-
-    acts = acts_0_24 + acts_24_41 + acts_41_59 + acts_59_81
-    print "Total steps: ", len(acts)
-
-    audit_state(hp_0.state_given(initial_state, acts))
-
-    print "BFS test complete. (4 step)"
-
-def test_bfs():
-
-    print "Testing BFS..."
-
-    # test_bfs_7steps()
-
-    # test_bfs_4steps()
-
-
-    hp_0  = HuarongPass(initial_state)
-    hp_57 = HuarongPass(step_57_state)
-
-
-    goal_state = None
-    acts_57_81 = search.breadth_first_search(hp_57).solution()
-
-
-    print len(acts_57_81), acts_57_81
-
-    acts = acts_57_81
-    print "Total steps: ", len(acts)
-
-    audit_state(hp_0.state_given(step_57_state, acts))
-
-    print "BFS test complete."
-
-
-
-def test_dfs():
-    print "Testing DFS..."
-
-    hp_dfs = HuarongPass()
-
-    acts = huarong_pass_search('DFS')                                               ### Full DFS test ###
-    
-    print acts
-    print "Total steps: ", len(acts)                                                # output results
-    audit_state(hp_dfs.state_given(initial_state, acts))                            # check result is valid
-
-    print "DFS test complete."
-
-
-def test_ids():
-    global goal_state
-
-    print "Testing IDS..."
-
-    hp_0  = HuarongPass(initial_state)
-    hp_24 = HuarongPass(step_24_state)
-    hp_30 = HuarongPass(step_30_state)
-    hp_41 = HuarongPass(step_41_state)
-    hp_48 = HuarongPass(step_48_state)
-    hp_59 = HuarongPass(step_59_state)
-    hp_72 = HuarongPass(step_72_state)
-    hp_81 = HuarongPass(step_81_state)
-
-    # goal_state = step_24_state
-    # acts_0_24 = search.iterative_deepening_search(hp_0).solution()
-
-    # goal_state = step_30_state
-    # acts_24_30 = search.iterative_deepening_search(hp_24).solution()
-
-    # goal_state = step_41_state
-    # acts_30_41 = search.iterative_deepening_search(hp_30).solution()
-
-    # goal_state = step_48_state
-    # acts_41_48 = search.iterative_deepening_search(hp_41).solution()                 
-
-    # goal_state = step_59_state
-    # acts_48_59 = search.iterative_deepening_search(hp_48).solution()  
-
-    # goal_state = step_72_state
-    # acts_59_72 = search.iterative_deepening_search(hp_59).solution()  
-
-    goal_state = None
-    acts_72_81 = search.iterative_deepening_search(hp_72).solution()
-
-
-    # print len(acts_0_24), acts_0_24
-    # print len(acts_24_30), acts_24_30
-    # print len(acts_30_41), acts_30_41
-    # print len(acts_41_48), acts_41_48
-    # print len(acts_48_59), acts_48_59
-    # print len(acts_59_72), acts_59_72
-    # print len(acts_72_81), acts_72_81
-
-    # acts = acts_0_24 + acts_24_30 + acts_30_41 + acts_41_48 + acts_48_59 + acts_59_72 + acts_72_81
-    # print "Total steps: ", len(acts)
-
-    # audit_state(hp_0.state_given(initial_state, acts))
-
-    audit_state(hp_0.state_given(step_72_state, acts_72_81))
-
-    print "IDS test complete."
-
 
 ######### SETUP #######################
 
@@ -934,7 +720,7 @@ def test_ids():
 
 ######### TESTING #####################
 
-if DO_TESTING:
+if __name__ == '__main__' and DO_TESTING:
 
     print "Testing..."
 
@@ -946,30 +732,6 @@ if DO_TESTING:
     assert hp.states_equal(initial_state, initial_state) == True
     assert hp.states_equal(no_state, initial_state) == False
 
-    assert huarong_pass_search('x') == []
-    assert huarong_pass_search(' ')  == []
-    assert huarong_pass_search('')  == []
-
-
-    # test_bfs()
-
-    # test_ids()
-    
-    test_dfs()
-
-
-    # dls_actions = huarong_pass_search('DLS')
-    # print len(dls_actions), dls_actions
-    
-
-    # bfs_actions = huarong_pass_search('BFS')
-    # print len(bfs_actions), bfs_actions
-    
-    # ids_actions = huarong_pass_search('IDS')
-    # print len(ids_actions), ids_actions
-
-    # dfs_actions = huarong_pass_search('DFS')
-    # print len(dfs_actions), dfs_actions
     
 
 
@@ -977,3 +739,16 @@ if DO_TESTING:
     print "All tests passed!"
     print ''
 
+
+
+
+
+class MAXSAT (search.Problem):
+
+  def __init__():
+    pass
+
+
+
+def run_maxsat():
+  pass
