@@ -20,12 +20,20 @@ PARTIAL_GOAL = False
 goal_state = None
 
 
+
+# filenames
 fn_hp_results = 'huarong_pass_results.txt'
 fn_ms_results = 'maxsat_results.txt'
 
+
+# used to estimate the cost of getting to goal state in h1() and h2()
 goal_coords = (3,1)
 
+# used for reducing the value of misplaced vertical pieces when estimating costs in h2()
+IMPORTANCE_FACTOR = 0.125
 
+
+########## STATES #####################
 
 BLANK = 'X'
 
@@ -661,10 +669,23 @@ class HuarongPass(search.Problem):
                 dist = abs(goal_coords[0] - bpos[0]) + abs(goal_coords[1] - bpos[1])
             return dist
 
-        # heuristic 2 - 
-        def h2(self, state):
-            estimated_cost = 100
-            return estimated_cost
+        # heuristic 2 - h1 plus distance from each vert 2x1 piece to top of board at a reduced ratio
+        def h2(self, n):
+            bpos = self.get_coords(n.state, 'B')
+            
+            if not bpos:
+                print "h1: no coords"
+            else:
+                bdist = abs(goal_coords[0] - bpos[0]) + abs(goal_coords[1] - bpos[1])
+
+            rows = []
+            for vt in self.tiles_vtwo:
+                vpos = self.get_coords(n.state, vt)
+                rows.append(vpos[0] * IMPORTANCE_FACTOR)
+
+            # print rows
+
+            return bdist + sum(rows)
 
 #######################################
 
@@ -730,35 +751,37 @@ def test_moves(tile):
 
         print "Moves test complete."
 
+
+
 def test_heuristics():
+    hp = HuarongPass()
+    test_heuristic(hp.h1)
+    test_heuristic(hp.h2)
 
-        hp = HuarongPass()
 
-        print hp.h1(step_78_state)
-        print_state(step_78_state)
+def test_heuristic(heur): 
 
-        print hp.h1(step_72_state)
-        print_state(step_72_state)
-        
-        print hp.h1(step_66_state)
-        print_state(step_66_state)
+    list_of_test_states = [step_81_state, step_78_state, step_66_state, step_62_state, step_59_state, step_24_state, initial_state]
 
-        print hp.h1(step_59_state)
-        print_state(step_59_state)
+    values = []
 
-        print hp.h1(step_24_state)
-        print_state(step_24_state)
+    for state in list_of_test_states:
+        hvalue = heur(search.Node(state))
+        values.append(hvalue)
+        print_state(state)
+        print '          ', heur.__name__ + '() =', hvalue
+        print ''
 
-        print hp.h1(initial_state)
-        print_state(initial_state)
+    print values
 
-def test_from(start_state):
+
+def test_from(start_state, heuristic):
 
     hp = HuarongPass()
 
     hp.set_initial_state(start_state)
 
-    acts = search.astar_search(hp, hp.h1).solution()
+    acts = search.astar_search(hp, heuristic).solution()
     
     print time.asctime()
     print 'Required actions: ', len(acts)
@@ -773,7 +796,7 @@ def test_from(start_state):
 
 if __name__ == '__main__' and DO_TESTING:
 
-        print "Testing..."
+        print time.asctime(), "- Testing..."
 
         hp = HuarongPass()
         
@@ -784,13 +807,9 @@ if __name__ == '__main__' and DO_TESTING:
         assert hp.states_equal(no_state, initial_state) == False
 
 
-        test_from(step_72_state)
-        test_from(step_66_state)
-        test_from(step_64_state)
-        test_from(step_62_state)
-        test_from(step_59_state)
-        test_from(step_24_state)
-        test_from(initial_state)
+        # test_heuristics()
+
+        test_from(step_59_state, hp.h2)
 
 
         print ''
@@ -798,13 +817,5 @@ if __name__ == '__main__' and DO_TESTING:
 
 ####### END HP TESTING ################
 
-######## MAXSAT #######################
-
-class MAXSAT (search.Problem):
-
-    def __init__():
-        pass
 
 
-def run_maxsat():
-    pass
