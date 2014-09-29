@@ -6,18 +6,21 @@
 # Dr. Asa Ben-Hur
 #################################################
 
-import search, time, re, random, math, sys, os
+import search, time, re, random, math, sys, os, copy
 
 VERBOSE_LOADING = False
+VERBOSE_GA = False
 
-
+subdir = './maxsat'
 inputfile = "ex2.cnf"
 fn_ms_results = 'maxsat_results.txt'
 
 COMMENT_CHAR = 'c'
 IGNORE = ['c', '%', '0']
 
-HILL_CLIMBING_RESTARTS = 20   # IAW the assignment spec
+HILL_CLIMBING_RESTARTS = 3  # IAW the assignment spec
+# PROB_MUTATION = 0.015       # optimal value for 50-var problems derived from multiple tests
+PROB_MUTATION = 0.01       # optimal value for 150-var problems derived from multiple tests still in testing
 
 ######## MAXSAT #######################
 # 3-CNF problem class initialize
@@ -38,7 +41,7 @@ class MAXSAT (search.Problem):
 
     state = ()
 
-    def __init__(self, filename):
+    def __init__(self, filename=None):
         temp_clauses = []
 
         f = open(filename, 'r')
@@ -58,7 +61,7 @@ class MAXSAT (search.Problem):
                         self.num_clauses = int(data[3])
 
                     else:                                                   # clauses
-                        temp_clauses.append(self.process_clause(line.split()))
+                        temp_clauses.append(self.transform_clause(line.split()))
 
             self.clauses = tuple(temp_clauses)
 
@@ -77,10 +80,6 @@ class MAXSAT (search.Problem):
 
             print "Valid: ", self.valid(self.immutable(self.state))
 
-        
-
-    def process_clause(self, clause):
-        return self.transform_clause(clause)
 
     def transform_clause(self, clause):                                         # convert numbers to ints and ignore all 0's
         return [int(x) for x in clause if x != '0']
@@ -105,6 +104,9 @@ class MAXSAT (search.Problem):
             print "MAXSAT: variables not initialized, invalid number of variables"
 
         return self.immutable(variables)
+
+    def set_state(self, new_state):
+        self.state = tuple(new_state)
 
     def get_num_clauses(self):
         return len(self.clauses)
@@ -158,19 +160,168 @@ class MAXSAT (search.Problem):
         state[var] = not state[var]
         return state
 
+    # mutate each value of state with probability 'prob'
+    def mutate(self, prob):
+        mutations = 0
+        mutated = self.mutable(self.state)
+        for i in range(1, len(mutated) - 1):
+            if random.random() < prob:
+                mutated[i] = not mutated[i]
+                mutations += 1
 
-def run_maxsat():
-    pass
+        if VERBOSE_GA:
+            print "Mutations:", mutations
+
+        self.set_state(self.immutable(mutated))
+        return 
+
+    def mate(self, other, two_point=False):
+        "Return a new individual crossing self and other. Uses 2-point crossover if specified."
+        if two_point:
+
+            c1 = random.randrange(len(self.state)/2)
+            c2 = random.randrange(len(self.state)/2, len(self.state))
+            # c = len(self.state)/2
+            new_instance = copy.deepcopy(self)
+            new_instance.set_state(self.state[:c1] + other.state[c1:c2] + self.state[c2:])
+
+        else:
+            c1 = len(self.state)/2
+            new_instance = copy.deepcopy(self)
+            new_instance.set_state(self.state[:c1] + other.state[c1:])
+
+        return new_instance
+
+    # return a randomized instance of this class
+    def randomized_self(self):
+        new_instance = copy.deepcopy(self)
+        new_instance.set_state(new_instance.init_variables(True))
+        return new_instance
 
 
-def schedule(t, k=20, lam=0.005, limit=10000):                  # good results in about 8 sec
+####### END MAXSAT CLASS ##############
+
+
+######### GA SECTION ##################
+def genetic_search(problem, ngen=1000, pmut=PROB_MUTATION, n=25):
+    """
+    Uses genetic algorithm techniques to optimize state. Runs for 'ngen'
+    generations, with a population of n, and each gene has probability of 
+    mutation pmut every time it's copied.
+    Original: Call genetic_algorithm on the appropriate parts of a problem.
+    This requires the problem to have states that can mate and mutate,
+    plus a value method that scores states."""
+    first_gen_states = [problem.randomized_self() for x in range(n)]
+    return genetic_algorithm(first_gen_states, get_fitness, ngen, pmut)
+
+def genetic_algorithm(population, fitness_fn, ngen=1000, pmut=0.015):
+    """ """
+    fittest = None
+    for i in range(ngen):
+        new_population = []
+        fitnesses = map(fitness_fn, population)
+        
+        if VERBOSE_GA:
+            print i, fitnesses, max(fitnesses)
+
+        for j in range(len(population)):
+            p1, p2 = select_weighted(population, fitnesses, 2)
+            child = p1.mate(p2)
+            child.mutate(pmut)                                                         ### DEPENDENT MUTATION? Less likely as i approaches ngen and max fitness
+            new_population.append(child)
+
+            if VERBOSE_GA:
+                print "Selected for combination:", get_fitness(p1), get_fitness(p2)
+        
+        population = new_population
+
+        fitnesses = map(fitness_fn, population)
+        fittest = population[fitnesses.index(max(fitnesses))]
+
+        if VERBOSE_GA:
+            print i, fitnesses, max(fitnesses)
+
+    return fittest
+
+def get_fitness(individual):
+    return individual.true_clauses(individual.state)
+
+# given a population and corresponding fitnesses, returns 'num" of population weighted by fitness
+def select_weighted(population, fitnesses, num):
+    sel = []
+
+    if max(fitnesses) - min(fitnesses) > 0:
+        reduced_fitnesses = [(x-min(fitnesses))**2 for x in fitnesses]          # artificially inflate the top fitnesses
+    else:
+        reduced_fitnesses = [x**2 for x in fitnesses]              
+
+
+    if VERBOSE_GA:
+        r = reduced_fitnesses[:]
+        r.sort(reverse=True)
+        f = fitnesses[:]
+        f.sort(reverse=True)
+        print f
+        print r
+
+
+    if any(reduced_fitnesses):
+        norm_f = [float(x)/sum(reduced_fitnesses) for x in reduced_fitnesses]   # normalize fitness values
+    else:
+        norm_f = reduced_fitnesses[:]
+    # print "Normalized scores:", norm_f, sum(norm_f)                             # check
+
+
+    sorted_p = sort_population_by_fitness(population, norm_f)                   # sort population in descending order
+    norm_f.sort(reverse=True)                                                   # sort fitnesses in descending value
+    
+    # print "Sorted normalized:", norm_f, sum(norm_f)                             # check
+    # print "Sorted pop:", [get_fitness(i) for i in sorted_p]
+
+
+    acf = compute_accumulated_norm_fitness(norm_f)                              # compute accumulated normal fitness values and keep order
+    # print_acf(acf)
+    # print "ACF              :", acf
+
+    for x in range(num):
+        sel.append(select_from(sorted_p, acf))
+
+    return tuple(sel)
+
+def sort_population_by_fitness(population, norm_fitnesses):                     # returns a sorted population based on fitness scores
+    sorted_pop = []
+    trash_pop = population[:]
+    trash_fitnesses = norm_fitnesses[:]
+
+    for i in range(len(trash_fitnesses)):                                       
+        hi = trash_fitnesses.index(max(trash_fitnesses))
+        sorted_pop.append(trash_pop.pop(hi))
+        trash_fitnesses.pop(hi)
+
+    return sorted_pop
+
+def compute_accumulated_norm_fitness(nf):                                       # returns list of [x plus sum of all preceding x]
+    return [nf[i] + sum(nf[:i]) for i in range(len(nf))]
+
+def select_from(population, acf_scores):                                        # returns one selectee from population based on associated acf scores and a random prob
+    min_fit = random.random()
+    for x in range(len(acf_scores)):
+        if acf_scores[x] > min_fit:
+            return population[x]
+    return population[-1]
+
+def print_acf(acf):
+    for x in acf:
+        print 'l'*int(x)*100
+
+#### SA COOLING SCHEDULES ##############
+def schedule(t, k=50, lam=0.002, limit=10000):                  # good results in about 8 sec with orig values (20, 0.005, 10000)
     "One possible schedule function for simulated annealing"
     if (t < limit):
         result = k * math.exp(-lam * t)
     else:
         result = 0
     return result 
-
 
 def simple_schedule(t, limit=3000):                             # good results within about 3 sec
     "Very simple schedule"
@@ -181,6 +332,29 @@ def simple_schedule(t, limit=3000):                             # good results w
     return result 
 
 
+###### RUN TESTS ON ALL FILES #########
+# TODO: Write to output file
+def run_maxsat():
+    testfiles = os.listdir(subdir)
+
+    testfiles_150var = [x for x in testfiles if '150' in x]
+    testfiles_50var  = [x for x in testfiles if x not in testfiles_150var]
+    
+    print "Testing", len(testfiles), "files"
+
+    print testfiles_150var
+    print testfiles_50var
+    
+    for f in testfiles_150var:
+        test_maxsat(subdir+ '/' + f)
+        pass
+
+    for f in testfiles_50var:
+        test_maxsat(subdir+ '/' + f)
+        pass
+
+    print "Testing complete!"
+
 
 ######## TESTING ######################
 def test_maxsat_sim_annealing(fn):
@@ -189,11 +363,14 @@ def test_maxsat_sim_annealing(fn):
     print 'Simulated annealing...'
 
     ms = MAXSAT(fn)
-    print "Initial:", ms.true_clauses(ms.initial)
+    print "Initial: ", ms.true_clauses(ms.initial)
 
-    solution = search.simulated_annealing(ms, simple_schedule)
+    t0 = time.time()
+    solution = search.simulated_annealing(ms, schedule)
+    td = time.time() - t0
 
-    print "Best solution:", ms.true_clauses(solution.state)
+    print "Solution: ", ms.true_clauses(solution.state)
+    print "Time: %.2f" % td
 
     return ms.true_clauses(solution.state)
 
@@ -204,11 +381,14 @@ def test_maxsat_hillclimbing(fn):
     print 'Hillclimbing...'
 
     ms = MAXSAT(fn)
-    print "Initial:", ms.true_clauses(ms.initial)  
+    print "Initial: ", ms.true_clauses(ms.initial)  
 
+    t0 = time.time()
     solution = search.hill_climbing(ms)
+    td = time.time() - t0
 
-    print "Best solution:", ms.true_clauses(solution)
+    print "Solution:", ms.true_clauses(solution)
+    print "Time: %.2f" % td
 
     return ms.true_clauses(solution)
 
@@ -219,8 +399,9 @@ def test_maxsat_hillclimbing_restarts(fn, restarts):
     print 'Hillclimbing with random restarts...'
 
     ms = MAXSAT(fn)
-    print "Initial:", ms.true_clauses(ms.initial)
+    print "Initial: ", ms.true_clauses(ms.initial)
 
+    t0 = time.time()
 
     best = None
     highest = 0
@@ -235,34 +416,80 @@ def test_maxsat_hillclimbing_restarts(fn, restarts):
             highest = ms.true_clauses(sol)
             best = sol[:]
 
+    td = time.time() - t0
     
-    print "Best solution:", ms.true_clauses(best)
+    print "Solution:", ms.true_clauses(best)
+    print "Time: %.2f" % td
 
     return ms.true_clauses(best)
 
 
-def test_maxsat_genetic_algorithms(fn):
-    return None
+def test_maxsat_genetic_algorithms(fn, gens):
+
+    print ''
+    print 'Genetic algorithms...generations:', gens
+
+    ms = MAXSAT(fn)
+    print "Initial: ", ms.true_clauses(ms.initial)  
+
+    
+    solutions = []
+    pmuts = [float(x)/1000 for x in range(1,50)]
+
+    for prob_mut in pmuts:
+        t0 = time.time()
+            
+        solution = genetic_search(ms, gens, prob_mut)
+
+        td = time.time() - t0    
+
+        print "Solution:", get_fitness(solution)
+        print "Time: %.2f" % td
+
+        solutions.append(get_fitness(solution))
+
+    for x in range(len(pmuts)):
+        print pmuts[x], solutions[x]
+
+    solution = max(solutions)
+
+    return solution
+    return get_fitness(solution)
+
 
 
 def test_maxsat(fn):
     goal = MAXSAT(fn).get_num_clauses()
-    print 'Testing...', fn
-    print 'Target goal clauses:', goal
+    print 'Testing...', fn, "@", time.asctime()
+    print 'Target true clauses:', goal
 
     results = []
-    results.append(('SIMULATED ANNEALING', test_maxsat_sim_annealing(fn)))
-    results.append(('STEEPEST ASCENT', test_maxsat_hillclimbing(fn)))
-    results.append(('STEEPEST ASCENT WITH RANDOM RESTARTS', test_maxsat_hillclimbing_restarts(fn, HILL_CLIMBING_RESTARTS)))
-    results.append(('GENETIC ALGORITHMS', test_maxsat_genetic_algorithms(fn)))
+    # results.append(('GENETIC ALGORITHMS gen 1', test_maxsat_genetic_algorithms(fn, 1)))
+    results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 50)))
+    # results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 100)))
+    # results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 100)))
+
+    # results.append(('SIMULATED ANNEALING', test_maxsat_sim_annealing(fn)))
+    # results.append(('STEEPEST ASCENT', test_maxsat_hillclimbing(fn)))
+    # results.append(('STEEPEST ASCENT WITH RANDOM RESTARTS', test_maxsat_hillclimbing_restarts(fn, HILL_CLIMBING_RESTARTS)))
+
+
 
     scores = [x[1] for x in results]
 
     print ''
-    print "Best composite score:", max(scores), "/", goal, " ...via", results[scores.index(max(scores))][0]
+    print fn,"Best composite score:", max(scores), "/", goal, " ...via", results[scores.index(max(scores))][0]
+    print ''
 
 
 
 
 if __name__ == "__main__":
+    
     test_maxsat(inputfile)
+
+    # run_maxsat()
+
+    print "Testing complete!"
+
+    
