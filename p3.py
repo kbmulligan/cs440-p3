@@ -151,6 +151,13 @@ step_81_state =  (('D', 'A', 'F', 'C'),             #### ACTUALLY TAKES 118 STEP
                   ('I', 'B', 'B', 'X'),
                   ('J', 'B', 'B', 'X'))
 
+
+MIN_MOVES =    ((59,58,59), 
+                (48,47,48), 
+                (8,23,8), 
+                (1,0,1))
+
+
 no_state =      (('X', 'X', 'X', 'X'),
                  ('X', 'X', 'X', 'X'),
                  ('X', 'X', 'X', 'X'),
@@ -259,7 +266,7 @@ test_state = {  'A':  (('X', 'X', 'X', 'X'),
 # e.g. ('G', 'LEFT') or ('A', 'DOWN')
 # in these comments I use the terms step and action interchangeably
 
-
+EOL = '\n'
 
 ######### MAIN CLASS ##################
 class HuarongPass(search.Problem):
@@ -703,10 +710,25 @@ class HuarongPass(search.Problem):
 
         # print rows
 
-        estimate = bdist + sum(rows)
+        estimate = bdist**2 + sum(rows)
 
         # print "h2: ",estimate
         return estimate
+
+    # returns the min number of moves required based on the location of Cao Cao's block - basically a lookup table
+    def h3(self, n):
+
+        bpos = self.get_coords(n.state, 'B')
+        
+        if not bpos:
+            print "h3: no coords"
+        else:
+            estimate = MIN_MOVES[bpos[0]][bpos[1]]
+
+        # print "h3: ",estimate
+        return estimate
+
+
 
 #######################################
 
@@ -730,8 +752,76 @@ def direction_of (action):
 # runs tests and outputs to results file
 def run_huarong_pass():
 
-    pass
+    start_state = initial_state
+    start_state = step_64_state                                                                     ######### REMOVE BEFORE TURN-IN ###########
 
+    hp = HuarongPass()
+    hp.set_initial_state(start_state)
+
+    f = open(fn_hp_results, 'w')
+    if not f:
+        print "HuarongPass: error opeing file:", fn_hp_results
+
+    else:
+        ######## RUN H1 ###############
+        heuristic = hp.h1
+
+        print "Running Huarong Pass with A*...Heuristic:", heuristic.__name__, "@", time.asctime()
+
+        hp = HuarongPass()
+        hp.set_initial_state(start_state)
+
+        t0 = time.time()
+        acts1 = search.astar_search(hp, heuristic).solution()
+        td1 = time.time() - t0
+
+        print 'Running time:', td1, 'seconds'
+        print 'Required actions: ', len(acts1)
+        print ''
+
+
+        ######## RUN H2 ###############
+        heuristic = hp.h2
+
+        print "Running Huarong Pass with A*...Heuristic:", heuristic.__name__, "@", time.asctime()
+
+        t0 = time.time()
+        acts2 = search.astar_search(hp, heuristic).solution()
+        td2 = time.time() - t0
+
+        print 'Running time:', td2, 'seconds'
+        print 'Required actions: ', len(acts2)
+        print ''
+
+        action_delta = abs(len(acts1) - len(acts2))
+        time_delta = abs(td1 - td2)
+
+        if (len(acts1) > len(acts2)):
+            dominant = hp.h2.__name__
+        elif (len(acts2) > len(acts1)):
+            dominant = hp.h1.__name__
+        else:
+            dominant = 'Neither'
+
+        if (td1 > td2):
+            fastest = hp.h2.__name__
+        else:
+            fastest = hp.h1.__name__
+
+
+        # Determine better heuristic and report
+        print dominant, 'was the dominant heuristic with', action_delta, 'fewer actions.'
+        print fastest, 'was the faster heuristic, running for', time_delta, 'fewer seconds.'
+
+        y = str(dominant) + ' was the dominant heuristic with ' + str(action_delta) + ' fewer actions.' + EOL
+        f.write(y)
+
+        s = str(fastest) + ' was the faster heuristic, running for ' + str(time_delta) + ' fewer seconds.' + EOL
+        f.write(s)
+
+    f.close()
+
+    return None
 
 
 
@@ -833,9 +923,14 @@ if __name__ == '__main__' and DO_TESTING:
         # test_from(step_59_state, hp.h1)         # took 782 sec
         # test_from(step_59_state, hp.h2)         # took 1211 sec
 
-        test_from(step_24_state, hp.h1)         # took xxx sec
+        # test_from(step_41_state, hp.h1)         # took xxx sec
+        # test_from(step_59_state, hp.h2)         # took xxx sec
 
+        # test_from(step_41_state, hp.h3)         # took 1500 sec
 
+        test_from(initial_state, hp.h3)         # took XXXX sec
+
+        # run_huarong_pass()
 
 
 
