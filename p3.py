@@ -30,7 +30,7 @@ fn_ms_results = 'maxsat_results.txt'
 goal_coords = (3,1)
 
 # used for reducing the value of misplaced vertical pieces when estimating costs in h2()
-IMPORTANCE_FACTOR = 0.125
+IMPORTANCE_FACTOR = 5
 
 
 ########## STATES #####################
@@ -666,7 +666,7 @@ class HuarongPass(search.Problem):
             return equal 
 
 
-    # heuristic 1 - gives the Manhattan distance for Cao Cao to get to the goal position given a node
+    # heuristic 1 - gives the Manhattan distance for Cao Cao to get to the goal position given a node and adds each block in his way
     def h1(self, n):
         bpos = self.get_coords(n.state, 'B')
         
@@ -710,7 +710,7 @@ class HuarongPass(search.Problem):
 
         # print rows
 
-        estimate = bdist**2 + sum(rows)
+        estimate = bdist + sum(rows)
 
         # print "h2: ",estimate
         return estimate
@@ -722,11 +722,15 @@ class HuarongPass(search.Problem):
         
         if not bpos:
             print "h3: no coords"
+            estimate = 1
         else:
             estimate = MIN_MOVES[bpos[0]][bpos[1]]
 
         # print "h3: ",estimate
         return estimate
+
+    def hmax(self, n):
+        return max(self.h1(n), self.h2(n), self.h3(n))
 
 
 
@@ -752,8 +756,11 @@ def direction_of (action):
 # runs tests and outputs to results file
 def run_huarong_pass():
 
+    # buffer that gets written to the output file after all searching is complete
+    report = []
+
     start_state = initial_state
-    start_state = step_64_state                                                                     ######### REMOVE BEFORE TURN-IN ###########
+    start_state = step_66_state                                                                     ######### REMOVE BEFORE TURN-IN ###########
 
     hp = HuarongPass()
     hp.set_initial_state(start_state)
@@ -764,60 +771,85 @@ def run_huarong_pass():
 
     else:
         ######## RUN H1 ###############
-        heuristic = hp.h1
+        h1 = hp.h1
 
-        print "Running Huarong Pass with A*...Heuristic:", heuristic.__name__, "@", time.asctime()
+        srun1 = "Running Huarong Pass with A*...Heuristic: " + h1.__name__ + " @ " + time.asctime()
+        print srun1
+        report.append(srun1)
+
 
         hp = HuarongPass()
         hp.set_initial_state(start_state)
 
         t0 = time.time()
-        acts1 = search.astar_search(hp, heuristic).solution()
+        acts1 = search.astar_search(hp, h1).solution()
         td1 = time.time() - t0
 
-        print 'Running time:', td1, 'seconds'
-        print 'Required actions: ', len(acts1)
+        runtime1 = 'Running time: ' + str(td1) + ' seconds'
+        print runtime1
+        report.append(runtime1)
+
+        print 'Required actions in solution: ', len(acts1)
+        print 'Number expanded nodes:', search.num_expanded
         print ''
+
+        search.reset_nodes_expanded()
 
 
         ######## RUN H2 ###############
-        heuristic = hp.h2
+        h2 = hp.hmax
 
-        print "Running Huarong Pass with A*...Heuristic:", heuristic.__name__, "@", time.asctime()
+        srun2 = "Running Huarong Pass with A*...Heuristic: " + h2.__name__ + " @ " + time.asctime()
+        report.append(srun2)
+        print report[-1]
 
         t0 = time.time()
-        acts2 = search.astar_search(hp, heuristic).solution()
+        acts2 = search.astar_search(hp, h2).solution()
         td2 = time.time() - t0
 
-        print 'Running time:', td2, 'seconds'
-        print 'Required actions: ', len(acts2)
+        runtime2 = 'Running time: ' + str(td2) + ' seconds'
+        report.append(runtime2)
+        print runtime2
+
+        print 'Required actions in solution: ', len(acts2)
+        print 'Number expanded nodes:', search.num_expanded
         print ''
 
+
+
+        # Determine better heuristic
         action_delta = abs(len(acts1) - len(acts2))
         time_delta = abs(td1 - td2)
 
-        if (len(acts1) > len(acts2)):
-            dominant = hp.h2.__name__
-        elif (len(acts2) > len(acts1)):
-            dominant = hp.h1.__name__
+        if (len(acts1) < len(acts2)):
+            not_optimal = h2.__name__
+        elif (len(acts2) < len(acts1)):
+            not_optimal = h1.__name__
         else:
-            dominant = 'Neither'
+            not_optimal = 'Neither'
 
         if (td1 > td2):
-            fastest = hp.h2.__name__
+            fastest = h2.__name__
         else:
-            fastest = hp.h1.__name__
+            fastest = h1.__name__
 
 
-        # Determine better heuristic and report
-        print dominant, 'was the dominant heuristic with', action_delta, 'fewer actions.'
-        print fastest, 'was the faster heuristic, running for', time_delta, 'fewer seconds.'
+        # Report better heuristic
+        sdom = str(not_optimal) + ' was less than optimal with ' + str(action_delta) + ' more actions.'
+        sfast = str(fastest) + ' was the faster heuristic, running for ' + str(time_delta) + ' fewer seconds.'
+        print sdom
+        print sfast
 
-        y = str(dominant) + ' was the dominant heuristic with ' + str(action_delta) + ' fewer actions.' + EOL
-        f.write(y)
+        
 
-        s = str(fastest) + ' was the faster heuristic, running for ' + str(time_delta) + ' fewer seconds.' + EOL
-        f.write(s)
+        # report.append(srun1)
+        # report.append(srun2)
+        report.append(sdom)
+        report.append(sfast)
+
+        for line in report:
+            f.write(line + EOL)
+
 
     f.close()
 
@@ -868,6 +900,8 @@ def test_heuristics():
     hp = HuarongPass()
     test_heuristic(hp.h1)
     test_heuristic(hp.h2)
+    test_heuristic(hp.h3)
+    test_heuristic(hp.hmax)
 
 
 def test_heuristic(heur): 
@@ -896,6 +930,7 @@ def test_from(start_state, heuristic):
     
     print time.asctime()
     print 'Required actions: ', len(acts)
+    print 'Number expanded nodes:', search.num_expanded
 
     audit_state(hp.state_given(start_state, acts))
 
@@ -927,10 +962,12 @@ if __name__ == '__main__' and DO_TESTING:
         # test_from(step_59_state, hp.h2)         # took xxx sec
 
         # test_from(step_41_state, hp.h3)         # took 1500 sec
+        # test_from(initial_state, hp.h3)         # took 31 hrs
 
-        test_from(initial_state, hp.h3)         # took XXXX sec
+        # test_from(step_41_state, hp.hmax)       # took 249
+        # test_from(initial_state, hp.hmax)       # took xxx -- started 2 Oct 1204
 
-        # run_huarong_pass()
+        run_huarong_pass()
 
 
 
