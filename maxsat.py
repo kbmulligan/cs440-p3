@@ -6,9 +6,17 @@
 # Dr. Asa Ben-Hur
 #################################################
 
-import search, time, re, random, math, sys, os, copy
+import search 
+import time
+import re
+import random
+import math
+import sys
+import os
+import copy
 
 VERBOSE_LOADING = False
+VERBOSE_TESTING = False
 VERBOSE_GA = False
 
 subdir = './maxsat'
@@ -18,9 +26,21 @@ fn_ms_results = 'maxsat_results.txt'
 COMMENT_CHAR = 'c'
 IGNORE = ['c', '%', '0']
 
-HILL_CLIMBING_RESTARTS = 3  # IAW the assignment spec
-# PROB_MUTATION = 0.015       # optimal value for 50-var problems derived from multiple tests
-PROB_MUTATION = 0.01       # optimal value for 150-var problems derived from multiple tests still in testing
+
+METHODS = ('GA', 'SA', 'HC', 'HCR')
+EXPANDED_NAME = {'GA': 'Genetic Algorithms', 'SA': 'Simulated Annealing', 'HC': 'Steepest Ascent', 'HCR': 'Steepest Ascent with Random Restarts'}
+
+HILL_CLIMBING_RESTARTS = 20  # IAW the assignment spec
+HILL_CLIMBING_RESTARTS = 20                                                          ################## # REMOVE BEFORE TURN-IN #######################
+
+
+PROB_MUTATION = 0.015       # optimal value for 50-var problems derived from multiple tests
+# PROB_MUTATION = 0.01       # optimal value for 150-var problems derived from multiple tests
+
+GENERATIONS = 100           # GA generations to use per run
+
+DEC_PRECISION = 5
+EOL = '\n'
 
 ######## MAXSAT #######################
 # 3-CNF problem class initialize
@@ -65,7 +85,7 @@ class MAXSAT (search.Problem):
 
             self.clauses = tuple(temp_clauses)
 
-        self.state = self.init_variables()
+        self.state = self.init_variables(True)
         self.initial = self.state                                           # set initial state
 
         if VERBOSE_LOADING:
@@ -79,6 +99,8 @@ class MAXSAT (search.Problem):
             print "Variables initialized:", len(self.state) - 1
 
             print "Valid: ", self.valid(self.immutable(self.state))
+
+        f.close()
 
 
     def transform_clause(self, clause):                                         # convert numbers to ints and ignore all 0's
@@ -331,6 +353,14 @@ def simple_schedule(t, limit=3000):                             # good results w
         result = 0
     return result 
 
+def dummy_schedule(t, limit=300):
+    "Very simple dummy schedule"
+    if (t < limit):
+        result = 1/(t + 0.0001)
+    else:
+        result = 0
+    return result 
+
 
 ###### RUN TESTS ON ALL FILES #########
 # TODO: Write to output file
@@ -340,66 +370,127 @@ def run_maxsat():
     testfiles_150var = [x for x in testfiles if '150' in x]
     testfiles_50var  = [x for x in testfiles if x not in testfiles_150var]
     
-    print "Testing", len(testfiles), "files"
-
-    print testfiles_150var
-    print testfiles_50var
+    begin_test = "MAXSAT: Testing " + str(len(testfiles)) + " files..." + " @ " + time.asctime()
+    print begin_test
     
+    results_150 = []
+    results_50 = []
+
     for f in testfiles_150var:
-        test_maxsat(subdir+ '/' + f)
-        pass
+        results_150.append(test_maxsat(subdir+ '/' + f))
 
     for f in testfiles_50var:
-        test_maxsat(subdir+ '/' + f)
-        pass
+        results_50.append(test_maxsat(subdir+ '/' + f))
+
+
+    # write it all down
+    msf = open(fn_ms_results, 'w')
+    if not msf:
+        print "run_maxsat: error opeing file:", fn_ms_results
+    else:
+        msf.write('--------------MAXSAT Testing Results--------------' + EOL)
+        msf.write(begin_test + EOL)
+
+        msf.write('150 Variables:'+ EOL)
+        for x in range(len(testfiles_150var)):
+            msf.write(' ' + testfiles_150var[x] + ' : ' + str(results_150[x])  + EOL)
+        
+        msf.write(EOL)
+        write_avgs(results_150, msf)
+        msf.write(EOL)
+
+
+        msf.write('50 Variables:'+ EOL)
+        for x in range(len(testfiles_50var)):
+            msf.write(' ' + testfiles_50var[x] + ' : ' + str(results_50[x])  + EOL)
+        
+        msf.write(EOL)
+        write_avgs(results_50, msf)
+
+        msf.write(EOL + 'Testing complete!' + EOL)
+        msf.close()
 
     print "Testing complete!"
+
+
+def write_avgs(results, fh):
+    # compute averages
+    avg_times = {}
+    avg_scores = {}
+
+    for method in METHODS:
+        avg_scores[method] = compute_avg_score(results, method)
+        avg_times[method] = compute_avg_time(results, method)
+    
+    fh.write("Average Scores:" + EOL)
+    for method in METHODS:
+        # print method + ' : ' + str(avg_scores[method])
+        fh.write(' ' + str(avg_scores[method]) + ' - ' + EXPANDED_NAME[method] + EOL)
+
+    fh.write("Average Times:" + EOL)
+    for method in METHODS:
+        # print method + ' : ' + str(avg_times[method])
+        fh.write(' ' + str(avg_times[method]) + ' - ' + EXPANDED_NAME[method] + EOL)
+        
+    fh.write(EOL)
+    return
+
+
+# given results and a method, returns avg score
+def compute_avg_score(results, method):
+    scores = [x[method][0] for x in results]
+    return sum(scores)/len(scores)
+
+# given results and a method, returns avg time
+def compute_avg_time(results, method):
+    times = [x[method][1] for x in results]
+    return sum(times)/len(times)
 
 
 ######## TESTING ######################
 def test_maxsat_sim_annealing(fn):
     
-    print ''
-    print 'Simulated annealing...'
+    # print ''
+    # print 'Simulated annealing...'
 
     ms = MAXSAT(fn)
-    print "Initial: ", ms.true_clauses(ms.initial)
+    # print "Initial: ", ms.true_clauses(ms.initial)
 
     t0 = time.time()
     solution = search.simulated_annealing(ms, schedule)
     td = time.time() - t0
 
-    print "Solution: ", ms.true_clauses(solution.state)
-    print "Time: %.2f" % td
+    # print "Solution: ", ms.true_clauses(solution.state)
+    # print "Time: %.2f" % td
 
-    return ms.true_clauses(solution.state)
+    return ms.true_clauses(solution.state), round(td, DEC_PRECISION)
 
 
 def test_maxsat_hillclimbing(fn):
     
-    print ''
-    print 'Hillclimbing...'
+    # print ''
+    # print 'Hillclimbing...'
 
     ms = MAXSAT(fn)
-    print "Initial: ", ms.true_clauses(ms.initial)  
+    # print "Initial: ", ms.true_clauses(ms.initial)  
 
     t0 = time.time()
     solution = search.hill_climbing(ms)
     td = time.time() - t0
 
-    print "Solution:", ms.true_clauses(solution)
-    print "Time: %.2f" % td
+    # print "Solution:", ms.true_clauses(solution)
+    # print "Time: %.2f" % td
 
-    return ms.true_clauses(solution)
+    return ms.true_clauses(solution), round(td, DEC_PRECISION)
 
 
 def test_maxsat_hillclimbing_restarts(fn, restarts):
 
-    print ''
-    print 'Hillclimbing with random restarts...'
+    # print ''
+    # print 'Hillclimbing with random restarts...(' + str(HILL_CLIMBING_RESTARTS) + ')'
 
     ms = MAXSAT(fn)
-    print "Initial: ", ms.true_clauses(ms.initial)
+    # print "Initial: ", ms.true_clauses(ms.initial)
 
     t0 = time.time()
 
@@ -418,77 +509,71 @@ def test_maxsat_hillclimbing_restarts(fn, restarts):
 
     td = time.time() - t0
     
-    print "Solution:", ms.true_clauses(best)
-    print "Time: %.2f" % td
+    # print "Solution:", ms.true_clauses(best)
+    # print "Time: %.2f" % td
 
-    return ms.true_clauses(best)
+    return ms.true_clauses(best), round(td, DEC_PRECISION)
 
 
 def test_maxsat_genetic_algorithms(fn, gens):
 
-    print ''
-    print 'Genetic algorithms...generations:', gens
+    # print ''
+    # print 'Genetic algorithms...generations:', gens
 
     ms = MAXSAT(fn)
-    print "Initial: ", ms.true_clauses(ms.initial)  
+    # print "Initial: ", ms.true_clauses(ms.initial)  
 
-    
-    solutions = []
-    pmuts = [float(x)/1000 for x in range(1,50)]
 
-    for prob_mut in pmuts:
-        t0 = time.time()
-            
-        solution = genetic_search(ms, gens, prob_mut)
+    t0 = time.time()
+        
+    solution = genetic_search(ms, gens, PROB_MUTATION)
 
-        td = time.time() - t0    
+    td = time.time() - t0    
 
-        print "Solution:", get_fitness(solution)
-        print "Time: %.2f" % td
+    # print "Solution:", get_fitness(solution)
+    # print "Time: %.2f" % td
 
-        solutions.append(get_fitness(solution))
-
-    for x in range(len(pmuts)):
-        print pmuts[x], solutions[x]
-
-    solution = max(solutions)
-
-    return solution
-    return get_fitness(solution)
+    return get_fitness(solution), round(td, DEC_PRECISION)
 
 
 
 def test_maxsat(fn):
     goal = MAXSAT(fn).get_num_clauses()
-    print 'Testing...', fn, "@", time.asctime()
-    print 'Target true clauses:', goal
+    
+    if VERBOSE_TESTING:
+        print 'Testing...', fn, "@", time.asctime()
+        print 'Target true clauses:', goal
 
     results = []
-    # results.append(('GENETIC ALGORITHMS gen 1', test_maxsat_genetic_algorithms(fn, 1)))
-    results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 50)))
-    # results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 100)))
-    # results.append(('GENETIC ALGORITHMS gen 1000', test_maxsat_genetic_algorithms(fn, 100)))
 
-    # results.append(('SIMULATED ANNEALING', test_maxsat_sim_annealing(fn)))
-    # results.append(('STEEPEST ASCENT', test_maxsat_hillclimbing(fn)))
-    # results.append(('STEEPEST ASCENT WITH RANDOM RESTARTS', test_maxsat_hillclimbing_restarts(fn, HILL_CLIMBING_RESTARTS)))
+    results.append(('GENETIC ALGORITHMS', test_maxsat_genetic_algorithms(fn, GENERATIONS)))
+    results.append(('SIMULATED ANNEALING', test_maxsat_sim_annealing(fn)))
+    results.append(('STEEPEST ASCENT', test_maxsat_hillclimbing(fn)))
+    results.append(('STEEPEST ASCENT WITH RANDOM RESTARTS', test_maxsat_hillclimbing_restarts(fn, HILL_CLIMBING_RESTARTS)))
 
 
 
-    scores = [x[1] for x in results]
+    scores = [x[1][0] for x in results]
 
-    print ''
-    print fn,"Best composite score:", max(scores), "/", goal, " ...via", results[scores.index(max(scores))][0]
-    print ''
+    if VERBOSE_TESTING:
+        # print ''
+        print fn,"Best composite score:", max(scores), "/", goal, " ...via", results[scores.index(max(scores))][0]
+    
 
+    all_results = {'GA': results[0][1], 'SA': results[1][1], 'HC': results[2][1], 'HCR': results[3][1]}
+
+    # print all_results
+    # print ''
+
+    return all_results
 
 
 
 if __name__ == "__main__":
     
-    test_maxsat(inputfile)
+    # test_maxsat(inputfile)
 
-    # run_maxsat()
+    run_maxsat()
 
     print "Testing complete!"
 
