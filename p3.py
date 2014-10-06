@@ -1,11 +1,17 @@
 """
 CS440 Assignment 3
 Submitted by K. Brett Mulligan (eID: kbmulli)
-My code...
+This module implements classes from the Russel and Norvig text,
+AI: A Modern Approach. It relies on search.py. To replicate the 
+Huarong Pass A* results, call run_huarong_pass(). To replicate
+the MAXSAT results, call run_maxsat(). Expect long running times.
+After the program has completed results are available in an
+appropriately named text file.
 """
 
 #################################################
 # p3.py - find a solution to Huarong Pass using A* and two different heuristics
+#       - employ four local search strategies to solve MAX-SAT problems
 # by K. Brett Mulligan
 # 24 Sep 2014
 # CSU CS440
@@ -15,7 +21,7 @@ My code...
 import search
 import time
 
-DO_TESTING = True                                                                      
+DO_TESTING = True
 PARTIAL_GOAL = False
 goal_state = None
 
@@ -30,7 +36,7 @@ fn_ms_results = 'maxsat_results.txt'
 goal_coords = (3,1)
 
 # used for reducing the value of misplaced vertical pieces when estimating costs in h2()
-IMPORTANCE_FACTOR = 5
+IMPORTANCE_FACTOR = 0.125
 
 
 ########## STATES #####################
@@ -152,7 +158,7 @@ step_81_state =  (('D', 'A', 'F', 'C'),             #### ACTUALLY TAKES 118 STEP
                   ('J', 'B', 'B', 'X'))
 
 
-MIN_MOVES =    ((59,58,59), 
+MIN_MOVES =    ((61,60,61), 
                 (48,47,48), 
                 (8,23,8), 
                 (1,0,1))
@@ -273,6 +279,8 @@ class HuarongPass(search.Problem):
     """This class extends search.Problem and implements the actions, 
     result, and goal_test methods. To use this class, instantiate it, 
     and call the appropriate search.py methods on it."""
+
+    goal_tests = 0
 
     tiles_single = ('G', 'H', 'I', 'J')
     tiles_vtwo = ('A', 'C', 'D', 'F')
@@ -411,6 +419,7 @@ class HuarongPass(search.Problem):
             must be centered at the bottom of the grid. This method checks for 
             that condition."""
             is_goal = False
+            self.goal_tests += 1
 
             if goal_state and PARTIAL_GOAL:
                     is_goal = (state[3][1] == 'B' and state[3][2] == 'B' and state[4][1] == 'B' and state[4][2] == 'B') or (PARTIAL_GOAL and self.states_equal(goal_state, state))
@@ -664,9 +673,12 @@ class HuarongPass(search.Problem):
                                     equal = False
 
             return equal 
+    
+    def reset_goal_tests(self):
+        self.goal_tests = 0
 
 
-    # heuristic 1 - gives the Manhattan distance for Cao Cao to get to the goal position given a node and adds each block in his way
+    # heuristic 1 - gives the Manhattan distance for Cao Cao to get to the goal position given a node
     def h1(self, n):
         bpos = self.get_coords(n.state, 'B')
         
@@ -677,15 +689,23 @@ class HuarongPass(search.Problem):
         
         # add a point for each block in his way along the Manhattan distance, each block indicates at least one more move that must be made
         extra_moves = 0
+        in_way = []
 
         if n.state[goal_coords[0]][goal_coords[1]] not in [BLANK, 'B']:
             extra_moves += 1
-        if n.state[goal_coords[0] + 1][goal_coords[1]] not in [BLANK, 'B']:
+            in_way.append(n.state[goal_coords[0]][goal_coords[1]])
+
+        if n.state[goal_coords[0] + 1][goal_coords[1]] not in [BLANK, 'B'] + in_way:
             extra_moves += 1
-        if n.state[goal_coords[0]][goal_coords[1] + 1] not in [BLANK, 'B']:
+            in_way.append(n.state[goal_coords[0]][goal_coords[1]])
+
+        if n.state[goal_coords[0]][goal_coords[1] + 1] not in [BLANK, 'B'] + in_way:
             extra_moves += 1
-        if n.state[goal_coords[0] + 1][goal_coords[1] + 1] not in [BLANK, 'B']:
+            in_way.append(n.state[goal_coords[0]][goal_coords[1]])
+
+        if n.state[goal_coords[0] + 1][goal_coords[1] + 1] not in [BLANK, 'B'] + in_way:
             extra_moves += 1
+            in_way.append(n.state[goal_coords[0]][goal_coords[1]])
 
 
         # get total estimate
@@ -694,7 +714,21 @@ class HuarongPass(search.Problem):
         # print "h1:", estimate
         return estimate
 
-    # heuristic 2 - h1 plus distance from each vert 2x1 piece to top of board at a reduced ratio
+    # returns the min number of moves required based on the location of Cao Cao's block - basically a lookup table
+    def h2(self, n):
+
+        bpos = self.get_coords(n.state, 'B')
+        
+        if not bpos:
+            print "h3: no coords"
+            estimate = 1
+        else:
+            estimate = MIN_MOVES[bpos[0]][bpos[1]]
+
+        # print "h3: ",estimate
+        return estimate
+
+    # heuristic 3 - h1 plus distance from each vert 2x1 piece to top of board at a reduced ratio
     def h2(self, n):
         bpos = self.get_coords(n.state, 'B')
         
@@ -710,27 +744,13 @@ class HuarongPass(search.Problem):
 
         # print rows
 
-        estimate = bdist + sum(rows)
+        estimate = bdist + (bdist - 1)*sum(rows)
 
         # print "h2: ",estimate
         return estimate
 
-    # returns the min number of moves required based on the location of Cao Cao's block - basically a lookup table
-    def h3(self, n):
-
-        bpos = self.get_coords(n.state, 'B')
-        
-        if not bpos:
-            print "h3: no coords"
-            estimate = 1
-        else:
-            estimate = MIN_MOVES[bpos[0]][bpos[1]]
-
-        # print "h3: ",estimate
-        return estimate
-
     def hmax(self, n):
-        return max(self.h1(n), self.h2(n), self.h3(n))
+        return max(self.h1(n), self.h2(n))
 
 
 
@@ -760,61 +780,55 @@ def run_huarong_pass():
     report = []
 
     start_state = initial_state
-    start_state = step_66_state                                                                     ######### REMOVE BEFORE TURN-IN ###########
+    start_state = step_59_state                                                         ######### REMOVE BEFORE TURN-IN ###########
 
     hp = HuarongPass()
     hp.set_initial_state(start_state)
+
+    h1 = hp.h1
+    h2 = hp.h2
+
 
     f = open(fn_hp_results, 'w')
     if not f:
         print "HuarongPass: error opeing file:", fn_hp_results
 
     else:
+        report.append('Testing Huarong Pass Heuristics...')
+        report.append('')
+
         ######## RUN H1 ###############
-        h1 = hp.h1
-
-        srun1 = "Running Huarong Pass with A*...Heuristic: " + h1.__name__ + " @ " + time.asctime()
-        print srun1
-        report.append(srun1)
-
-
-        hp = HuarongPass()
-        hp.set_initial_state(start_state)
+        
+        report.append("Running A* Huarong Pass --- Heuristic: " + h1.__name__ + "     @ " + time.asctime())
+        print report[-1]
 
         t0 = time.time()
         acts1 = search.astar_search(hp, h1).solution()
         td1 = time.time() - t0
 
-        runtime1 = 'Running time: ' + str(td1) + ' seconds'
-        print runtime1
-        report.append(runtime1)
+        report.append('Time           : ' + str(td1) + ' seconds')
+        report.append('Actions        : ' +  str(len(acts1)))
+        report.append('Expanded nodes : ' + str(hp.goal_tests))
+        report.append('')
 
-        print 'Required actions in solution: ', len(acts1)
-        print 'Number expanded nodes:', search.num_expanded
-        print ''
-
-        search.reset_nodes_expanded()
+        hp.reset_goal_tests()
 
 
         ######## RUN H2 ###############
-        h2 = hp.hmax
 
-        srun2 = "Running Huarong Pass with A*...Heuristic: " + h2.__name__ + " @ " + time.asctime()
-        report.append(srun2)
+        report.append("Running A* Huarong Pass --- Heuristic: " + h2.__name__ + "     @ " + time.asctime())
         print report[-1]
 
         t0 = time.time()
         acts2 = search.astar_search(hp, h2).solution()
         td2 = time.time() - t0
 
-        runtime2 = 'Running time: ' + str(td2) + ' seconds'
-        report.append(runtime2)
-        print runtime2
+        report.append('Time           : ' + str(td2) + ' seconds')
+        report.append('Actions        : ' +  str(len(acts2)))
+        report.append('Expanded nodes : ' + str(hp.goal_tests))
+        report.append('')
 
-        print 'Required actions in solution: ', len(acts2)
-        print 'Number expanded nodes:', search.num_expanded
-        print ''
-
+        hp.reset_goal_tests()
 
 
         # Determine better heuristic
@@ -837,13 +851,9 @@ def run_huarong_pass():
         # Report better heuristic
         sdom = str(not_optimal) + ' was less than optimal with ' + str(action_delta) + ' more actions.'
         sfast = str(fastest) + ' was the faster heuristic, running for ' + str(time_delta) + ' fewer seconds.'
-        print sdom
-        print sfast
+        # print sdom
+        # print sfast
 
-        
-
-        # report.append(srun1)
-        # report.append(srun2)
         report.append(sdom)
         report.append(sfast)
 
@@ -853,6 +863,8 @@ def run_huarong_pass():
 
     f.close()
 
+
+    print 'Testing complete!'
     return None
 
 
@@ -930,7 +942,9 @@ def test_from(start_state, heuristic):
     
     print time.asctime()
     print 'Required actions: ', len(acts)
-    print 'Number expanded nodes:', search.num_expanded
+    print 'Number expanded nodes:', hp.goal_tests
+
+    hp.reset_nodes_expanded()
 
     audit_state(hp.state_given(start_state, acts))
 
@@ -955,17 +969,17 @@ if __name__ == '__main__' and DO_TESTING:
 
         # test_heuristics()
 
-        # test_from(step_59_state, hp.h1)         # took 782 sec
-        # test_from(step_59_state, hp.h2)         # took 1211 sec
+        # test_from(step_59_state, hp.h1)         # took 782 sec, expanded 41146
+        # test_from(step_59_state, hp.h2)         # took 1211 sec, expanded 54141
 
-        # test_from(step_41_state, hp.h1)         # took xxx sec
-        # test_from(step_59_state, hp.h2)         # took xxx sec
+        # test_from(step_41_state, hp.h1)         # took >39 hrs -- stopped early
+        # test_from(step_41_state, hp.h2)         # took xxx sec
 
         # test_from(step_41_state, hp.h3)         # took 1500 sec
         # test_from(initial_state, hp.h3)         # took 31 hrs
 
-        # test_from(step_41_state, hp.hmax)       # took 249
-        # test_from(initial_state, hp.hmax)       # took xxx -- started 2 Oct 1204
+        # test_from(step_41_state, hp.hmax)       # took 249 sec
+        # test_from(initial_state, hp.hmax)       # took 27 hrs
 
         run_huarong_pass()
 

@@ -16,7 +16,7 @@ import os
 import copy
 
 VERBOSE_LOADING = False
-VERBOSE_TESTING = False
+VERBOSE_TESTING = True
 VERBOSE_GA = False
 
 subdir = './maxsat'
@@ -35,11 +35,12 @@ HILL_CLIMBING_RESTARTS = 20                                                     
 
 
 PROB_MUTATION = 0.015       # optimal value for 50-var problems derived from multiple tests
-# PROB_MUTATION = 0.01       # optimal value for 150-var problems derived from multiple tests
+POPULATION_SIZE = 25
 
-GENERATIONS = 100           # GA generations to use per run
+GENERATIONS = 1000           # GA generations to use per run
 
 DEC_PRECISION = 5
+PERCENT_DIGITS = 2
 EOL = '\n'
 
 ######## MAXSAT #######################
@@ -208,7 +209,7 @@ class MAXSAT (search.Problem):
             new_instance.set_state(self.state[:c1] + other.state[c1:c2] + self.state[c2:])
 
         else:
-            c1 = len(self.state)/2
+            c1 = get_random_int_from_normal_distribution(1,len(self.state))
             new_instance = copy.deepcopy(self)
             new_instance.set_state(self.state[:c1] + other.state[c1:])
 
@@ -237,7 +238,8 @@ def genetic_search(problem, ngen=1000, pmut=PROB_MUTATION, n=25):
     return genetic_algorithm(first_gen_states, get_fitness, ngen, pmut)
 
 def genetic_algorithm(population, fitness_fn, ngen=1000, pmut=0.015):
-    """ """
+    """Uses selection, crossover, and probabilistic mutation to return the 
+    fittest of a population after a given number of generations."""
     fittest = None
     for i in range(ngen):
         new_population = []
@@ -336,8 +338,27 @@ def print_acf(acf):
     for x in acf:
         print 'l'*int(x)*100
 
+# get a random index from a normal distribution based on a min and max value
+def get_random_int_from_normal_distribution(mini, maxi):
+    index = int(round(random.gauss(0.5,.1)*(maxi-mini) + mini))
+    if (index > maxi):
+        index = maxi
+    if (index < mini):
+        index = mini
+    return index
+
+##### END GA SECTION ###################
+
 #### SA COOLING SCHEDULES ##############
-def schedule(t, k=50, lam=0.002, limit=10000):                  # good results in about 8 sec with orig values (20, 0.005, 10000)
+def mod_schedule(t, k=50, lam=0.002, limit=10000):                  # good results in about 8 sec with orig values (20, 0.005, 10000)
+    "One possible schedule function for simulated annealing"
+    if (t < limit):
+        result = k * math.exp(-lam * t)
+    else:
+        result = 0
+    return result 
+
+def schedule(t, k=20, lam=0.005, limit=10000):                  # good results in about 8 sec (50 var?) with orig values (20, 0.005, 10000)
     "One possible schedule function for simulated annealing"
     if (t < limit):
         result = k * math.exp(-lam * t)
@@ -422,10 +443,10 @@ def write_avgs(results, fh):
         avg_scores[method] = compute_avg_score(results, method)
         avg_times[method] = compute_avg_time(results, method)
     
-    fh.write("Average Scores:" + EOL)
+    fh.write("Average Scores: " + "(" + str(results[0]['MAX']) + " max possible)" + EOL)
     for method in METHODS:
         # print method + ' : ' + str(avg_scores[method])
-        fh.write(' ' + str(avg_scores[method]) + ' - ' + EXPANDED_NAME[method] + EOL)
+        fh.write(' ' + str(avg_scores[method]) + '    (' + str(pretty_percent(avg_scores[method], results[0]['MAX'])) + '%) - ' + EXPANDED_NAME[method] + EOL)
 
     fh.write("Average Times:" + EOL)
     for method in METHODS:
@@ -434,6 +455,10 @@ def write_avgs(results, fh):
         
     fh.write(EOL)
     return
+
+# return truncated percent
+def pretty_percent(x,y):
+    return round(100*float(x)/y, PERCENT_DIGITS)
 
 
 # given results and a method, returns avg score
@@ -450,8 +475,8 @@ def compute_avg_time(results, method):
 ######## TESTING ######################
 def test_maxsat_sim_annealing(fn):
     
-    # print ''
-    # print 'Simulated annealing...'
+    if VERBOSE_TESTING:
+        print 'Simulated annealing...'
 
     ms = MAXSAT(fn)
     # print "Initial: ", ms.true_clauses(ms.initial)
@@ -460,16 +485,17 @@ def test_maxsat_sim_annealing(fn):
     solution = search.simulated_annealing(ms, schedule)
     td = time.time() - t0
 
-    # print "Solution: ", ms.true_clauses(solution.state)
-    # print "Time: %.2f" % td
+    if VERBOSE_TESTING:
+        print ms.true_clauses(ms.initial), '->', ms.true_clauses(solution.state)
+        print "Time: %.2f" % td
 
     return ms.true_clauses(solution.state), round(td, DEC_PRECISION)
 
 
 def test_maxsat_hillclimbing(fn):
     
-    # print ''
-    # print 'Hillclimbing...'
+    if VERBOSE_TESTING:
+        print 'Hillclimbing...'
 
     ms = MAXSAT(fn)
     # print "Initial: ", ms.true_clauses(ms.initial)  
@@ -478,16 +504,17 @@ def test_maxsat_hillclimbing(fn):
     solution = search.hill_climbing(ms)
     td = time.time() - t0
 
-    # print "Solution:", ms.true_clauses(solution)
-    # print "Time: %.2f" % td
+    if VERBOSE_TESTING:
+        print ms.true_clauses(ms.initial), '->', ms.true_clauses(solution)
+        print "Time: %.2f" % td
 
     return ms.true_clauses(solution), round(td, DEC_PRECISION)
 
 
 def test_maxsat_hillclimbing_restarts(fn, restarts):
 
-    # print ''
-    # print 'Hillclimbing with random restarts...(' + str(HILL_CLIMBING_RESTARTS) + ')'
+    if VERBOSE_TESTING:
+        print 'Hillclimbing with random restarts...(' + str(HILL_CLIMBING_RESTARTS) + ')'
 
     ms = MAXSAT(fn)
     # print "Initial: ", ms.true_clauses(ms.initial)
@@ -499,7 +526,7 @@ def test_maxsat_hillclimbing_restarts(fn, restarts):
 
     for x in range(HILL_CLIMBING_RESTARTS):
 
-        ms.state = ms.init_variables(True)                  # randomize
+        ms.initial = ms.init_variables(True)                  # randomize
 
         sol = search.hill_climbing(ms)
 
@@ -509,16 +536,17 @@ def test_maxsat_hillclimbing_restarts(fn, restarts):
 
     td = time.time() - t0
     
-    # print "Solution:", ms.true_clauses(best)
-    # print "Time: %.2f" % td
+    if VERBOSE_TESTING:
+        print ms.true_clauses(ms.initial), '->', ms.true_clauses(best)
+        print "Time: %.2f" % td
 
     return ms.true_clauses(best), round(td, DEC_PRECISION)
 
 
 def test_maxsat_genetic_algorithms(fn, gens):
 
-    # print ''
-    # print 'Genetic algorithms...generations:', gens
+    if VERBOSE_TESTING:
+        print 'Genetic algorithms...generations:', gens
 
     ms = MAXSAT(fn)
     # print "Initial: ", ms.true_clauses(ms.initial)  
@@ -526,12 +554,13 @@ def test_maxsat_genetic_algorithms(fn, gens):
 
     t0 = time.time()
         
-    solution = genetic_search(ms, gens, PROB_MUTATION)
+    solution = genetic_search(ms, gens, PROB_MUTATION, POPULATION_SIZE)
 
     td = time.time() - t0    
 
-    # print "Solution:", get_fitness(solution)
-    # print "Time: %.2f" % td
+    if VERBOSE_TESTING:
+        print ms.true_clauses(ms.initial), '->', get_fitness(solution)
+        print "Time: %.2f" % td
 
     return get_fitness(solution), round(td, DEC_PRECISION)
 
@@ -557,10 +586,10 @@ def test_maxsat(fn):
 
     if VERBOSE_TESTING:
         # print ''
-        print fn,"Best composite score:", max(scores), "/", goal, " ...via", results[scores.index(max(scores))][0]
+        print fn,"-> Best score:", max(scores), "/", goal, "...via", results[scores.index(max(scores))][0]
     
 
-    all_results = {'GA': results[0][1], 'SA': results[1][1], 'HC': results[2][1], 'HCR': results[3][1]}
+    all_results = {'GA': results[0][1], 'SA': results[1][1], 'HC': results[2][1], 'HCR': results[3][1], 'MAX': goal}
 
     # print all_results
     # print ''
@@ -571,9 +600,9 @@ def test_maxsat(fn):
 
 if __name__ == "__main__":
     
-    # test_maxsat(inputfile)
+    test_maxsat(inputfile)
 
-    run_maxsat()
+    # run_maxsat()
 
     print "Testing complete!"
 
